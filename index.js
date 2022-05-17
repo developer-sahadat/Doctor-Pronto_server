@@ -22,7 +22,7 @@ function verifyToken(req, res, next) {
     return res.status(401).send({ message: "Unauthorized" });
   }
   const token = authorization.split(" ")[1];
-  jwt.verify(token, process.env.accessToken, function (err, decoded) {
+  jwt.verify(token, process.env.ACCESS_TOKEN, function (err, decoded) {
     if (err) {
       return res.status(403).send({ message: "Forbidden" });
     }
@@ -70,7 +70,7 @@ async function run() {
         $set: user,
       };
       const result = await userCollection.updateOne(filter, updateDoc, options);
-      var token = jwt.sign({ email }, process.env.accessToken, {
+      var token = jwt.sign({ email }, process.env.ACCESS_TOKEN, {
         expiresIn: "1h",
       });
 
