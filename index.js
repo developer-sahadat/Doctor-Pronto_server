@@ -1,9 +1,11 @@
 const express = require("express");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 var jwt = require("jsonwebtoken");
 const app = express();
 require("dotenv").config();
 var cors = require("cors");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const port = process.env.PORT || 5000;
 
 app.use(cors());
@@ -40,6 +42,23 @@ async function run() {
     const bookingCollection = client.db("doctor_pronto").collection("booking");
     const userCollection = client.db("doctor_pronto").collection("users");
     const doctorCollection = client.db("doctor_pronto").collection("doctor");
+    const paymentCollection = client.db("doctor_pronto").collection("payment");
+
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      const amount = price * 100;
+
+      // Create a PaymentIntent with the order amount and currency
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
 
     // Booking Post
     app.post("/doctor", verifyToken, async (req, res) => {
@@ -161,6 +180,28 @@ async function run() {
       const doc = booking;
       const result = await bookingCollection.insertOne(doc);
       res.send({ success: true, result });
+    });
+    app.get("/booking/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const appointment = await bookingCollection.findOne(query);
+      res.send(appointment);
+    });
+    app.patch("/appointment/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: ObjectId(id) };
+      const transaction = req.body;
+      const updateDoc = {
+        $set: {
+          paid: true,
+          translationId: transaction.translationId,
+        },
+      };
+
+      const result = await bookingCollection.updateOne(filter, updateDoc);
+
+      const payment = await paymentCollection.insertOne(transaction);
+      res.send(updateDoc);
     });
   } finally {
   }
